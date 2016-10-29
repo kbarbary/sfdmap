@@ -131,3 +131,13 @@ def test_skycoord():
 
         ebv = sfdmap.ebv(coords, interpolate=False)
         assert_allclose(ebv, true_ebv, rtol=0.01)
+
+
+def test_boundaries():
+    """Test that interpolation=False works at b=0"""
+
+    m = sfdmap.SFDMap()
+
+    for interp in (False, True):
+        for l in (0., np.pi/2, np.pi, 3. * np.pi / 2.):
+            m.ebv(l, 0., frame='galactic', unit='radian', interpolate=interp)

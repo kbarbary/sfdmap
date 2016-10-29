@@ -26,7 +26,7 @@ for n in [1, 10, 100]:
     for _ in range(n):
         m.ebv(0., 0., interpolate=interpolate)
     t = time.time() - t
-    print("{:5d} : {:7.2f} ms".format(n, t*1000.))
+    print("{:5d} : {:7.3f} ms".format(n, t*1000.))
 
 # time single coordinate access
 print("access array of coordinates (after initial read)")

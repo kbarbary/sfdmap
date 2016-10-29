@@ -33,7 +33,7 @@ def _isiterable(obj):
 # astropy's coordinate conversions have a gigantic overhead of 30-40ms. This
 # kills performance in situations where you need to get a single position
 # at a time. We can do better by including the core code for the most
-# common coordinate conversions (IRCS/FK5J2000) from astropy here.
+# common coordinate conversions (IRCS, FK5J2000) from astropy here.
 
 # Create rotation matrix about a given axis (x, y, z)
 def zrotmat(angle):
@@ -159,6 +159,10 @@ class _Hemisphere(object):
         else:
             x = np.round(x).astype(np.int)
             y = np.round(y).astype(np.int)
+
+            # some valid coordinates are right on the border (e.g., x/y = 4096)
+            x = np.clip(x, 0, self.data.shape[1]-1)
+            y = np.clip(y, 0, self.data.shape[0]-1) 
             return self.data[y, x]
 
 
@@ -175,31 +179,30 @@ class SFDMap(object):
     Parameters
     ----------
     mapdir : str, optional
-        Directory in which to find dust map FITS images, which must be
-        named ``SFD_dust_4096_[ngp,sgp].fits``. If not specified,
-        the value of the SFD_MAP_DIR configuration item is used. By
-        default, this is ``'.'``.  The value of ``SFD_MAP_DIR`` can be set
-        in the configuration file, typically located in
-        ``$HOME/.astropy/config/sncosmo.cfg``.
 
-    See Also
-    --------
-    get_ebv_from_map
+        Directory in which to find dust map FITS images, named
+        ``SFD_dust_4096_ngp.fits`` and ``SFD_dust_4096_sgp.fits`` by
+        default. If not specified, the value of the ``SFD_DIR``
+        environment variable is used, otherwise an empty string is
+        used.
 
     Examples
     --------
 
-    >>> m = SFDMap(mapdir='/path/to/SFD98/images')
+    Initialize map:
 
-    Get E(B-V) value at RA, Dec = 0., 0.:
+    >>> m = SFDMap('/path/to/dustmap/files')
 
-    >>> m.ebv((0., 0.))
+    Get E(B-V) value at RA, Dec = 0., 0. (ICRS frame)
+
+    >>> m.ebv(0., 0.)
     0.031814847141504288
 
     Get E(B-V) at RA, Dec = (0., 0.) and (1., 0.):
 
     >>> m.ebv([0., 1.], [0., 0.])
     array([ 0.03181485,  0.03275469])
+
     """
 
     def __init__(self, mapdir=None, north="SFD_dust_4096_ngp.fits",
@@ -223,20 +226,23 @@ class SFDMap(object):
 
         Parameters
         ----------
+
         coordinates or ra, dec:
 
             If one argument is passed, assumed to be a
             `astropy.coordinates.SkyCoords` instance.  If two
-            arguments, treated as ``RA, Dec`` (can be scalars or
+            arguments, treated as ``latitute, longitude`` (can be scalars or
             arrays).  In the two argument case, the frame and unit is
-            take from the keywords.
+            taken from the keywords.
 
         frame : {'icrs', 'fk5j2000', 'galactic'}
-            Coordinate frame, if two arguments are passed.
+            Coordinate frame, if two arguments are passed. Default is
+            ``'icrs'``.
 
         unit : {'degree', 'radian'}
 
-            Unit of coordinates, if two arguments are passed. Default is ``'degree'``.
+            Unit of coordinates, if two arguments are passed. Default
+            is ``'degree'``.
 
         interpolate : bool, optional
 
@@ -251,6 +257,11 @@ class SFDMap(object):
             Specific extinction E(B-V) at the given locations.
 
         """
+
+        # compatibility with sncosmo behavior: single argument 2-tuple
+        # is treated as (RA, Dec)
+        if (len(args) == 1) and (type(args[0]) is tuple):
+            args = args[0]
 
         if len(args) == 1:
             # treat object as an astropy.coordinates.SkyCoords
