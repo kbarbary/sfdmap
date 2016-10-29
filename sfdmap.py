@@ -136,13 +136,14 @@ def _bilinear_interpolate(data, y, x):
 class _Hemisphere(object):
     """Represents one of the hemispheres (in a single fle)"""
 
-    def __init__(self, fname):
+    def __init__(self, fname, scaling):
         self.data, header = getdata(fname, header=True)
+        self.data *= scaling
         self.crpix1 = header['CRPIX1']
         self.crpix2 = header['CRPIX2']
         self.lam_scal = header['LAM_SCAL']
         self.sign = header['LAM_NSGP']  # north = 1, south = -1
-
+        
     def ebv(self, l, b, interpolate):
         # Project from galactic longitude/latitude to lambert pixels.
         # (See SFD98 or SFD data FITS header).
@@ -206,7 +207,7 @@ class SFDMap(object):
     """
 
     def __init__(self, mapdir=None, north="SFD_dust_4096_ngp.fits",
-                 south="SFD_dust_4096_sgp.fits"):
+                 south="SFD_dust_4096_sgp.fits", scaling=0.86):
 
         # Get mapdir
         if mapdir is None:
@@ -220,7 +221,8 @@ class SFDMap(object):
         # don't load maps initially
         self.hemispheres = {'north': None, 'south': None}
 
-        
+        self.scaling = scaling
+
     def ebv(self, *args, frame='icrs', unit='degree', interpolate=True):
         """Get E(B-V) value(s) at given coordinate(s).
 
@@ -314,7 +316,8 @@ class SFDMap(object):
 
             # Initialize hemisphere if it hasn't already been done.
             if self.hemispheres[label] is None:
-                self.hemispheres[label] = _Hemisphere(self.fnames[label])
+                self.hemispheres[label] = _Hemisphere(self.fnames[label],
+                                                      self.scaling)
                        
             values[mask] = self.hemispheres[label].ebv(l[mask], b[mask],
                                                        interpolate)
@@ -325,6 +328,8 @@ class SFDMap(object):
             return values
 
 
-def ebv(*args, mapdir=None, frame='icrs', unit='degree', interpolate=True):
-    return SFDMap(mapdir=mapdir).ebv(*args, frame=frame, unit=unit,
-                                     interpolate=interpolate)
+def ebv(*args, mapdir=None, scaling=0.86, frame='icrs', unit='degree',
+        interpolate=True):
+    m = SFDMap(mapdir=mapdir, scaling=scaling)
+    return m.ebv(*args, frame=frame, unit=unit,
+                 interpolate=interpolate)

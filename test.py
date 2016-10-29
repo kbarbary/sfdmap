@@ -5,6 +5,7 @@ import os
 import numpy as np
 from numpy.testing import assert_allclose
 from astropy.coordinates import SkyCoord
+import pytest
 
 import sfdmap
 
@@ -106,33 +107,53 @@ def test_bilinear_interpolate():
     assert_allclose(f(data, 0.5, 0.5), 3.0)
 
 
-def test_single():
-    # value from http://irsa.ipac.caltech.edu/applications/DUST/
-    # with input "204.0 -30.0 J2000"
-    true_ebv = 0.0477
+def minimap():
+    return sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits',
+                         scaling=1.0)
 
-    # Use interpolate=False to match IRSA value
-    ebv = sfdmap.ebv(204.0, -30.0, interpolate=False)
-    assert_allclose(ebv, true_ebv, rtol=0.01)
+
+def test_versus_ned():
+    """Test versus NED results"""
+
+    # Results from https://ned.ipac.caltech.edu/forms/calculator.html
+    # (in our test patch image):
+    NED_RESULTS = [{'ra': 204.17470, 'dec':-29.960283, 'landoltv': 0.212},
+                   {'ra': 205.40142, 'dec':-33.098216, 'landoltv': 0.148}]
+    for d in NED_RESULTS:
+        d['ebv'] = d['landoltv'] / 2.742  # original SFD E(B-V)
+
+    m = minimap()
+    for d in NED_RESULTS:
+        ebv = m.ebv(d['ra'], d['dec'])
+        assert_allclose(ebv, d['ebv'], rtol=0.0, atol=0.001)
+
 
 def test_skycoord():
+    """Test that skycoord gives same results"""
+
+    m = minimap()
+    coords = SkyCoord(204.0, -30.0, frame='icrs', unit='degree')
+    ebv1 = m.ebv(coords)
+    ebv2 = m.ebv(204.0, -30.0)
+    assert_allclose(ebv1, ebv2)
+
+
+def test_fits_readers():
+    """Test that skycoord gives same results"""
     import fitsio
     from astropy.io.fits import getdata
 
     # test with different fits readers
-    for f in (fitsio.read, getdata):
-        sfdmap.getdata = f
-    
-        coords = SkyCoord(204.0, -30.0, frame='icrs', unit='deg')
+    sfdmap.getdata = fitsio.read
+    ebv1 = minimap().ebv(204.0, -30.0)
+    sfdmap.getdata = getdata
+    ebv2 = minimap().ebv(204.0, -30.0)
 
-        # value from http://irsa.ipac.caltech.edu/applications/DUST/
-        # with input "204.0 -30.0 J2000"
-        true_ebv = 0.0477
-
-        ebv = sfdmap.ebv(coords, interpolate=False)
-        assert_allclose(ebv, true_ebv, rtol=0.01)
+    assert ebv1 == ebv2
 
 
+@pytest.mark.skipif("SFD_DIR" not in os.environ,
+                    reason="SFD_DIR environment variable not set")
 def test_boundaries():
     """Test that interpolation=False works at b=0"""
 
