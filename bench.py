@@ -14,25 +14,25 @@ for temp in ("possibly cold", "hot"):
     t = time.time()
     sfdmap.ebv(0., 0.)
     t = time.time() - t
-    print("{:5d} : {:7.2f} ms".format(1, t*1000.))
+    print("        {:7.3f} ms".format(t*1000.))
 
 m = sfdmap.SFDMap()
 m.ebv(0., 0.)  # trigger file load
 
 # time single coordinate access
 print("access one coordinate at a time (after initial read)")
-for n in [1, 10, 100]:
-    t = time.time()
-    for _ in range(n):
-        m.ebv(0., 0., interpolate=interpolate)
-    t = time.time() - t
-    print("{:5d} : {:7.3f} ms".format(n, t*1000.))
+t = time.time()
+for _ in range(1000):
+    m.ebv(0., 0., interpolate=interpolate)
+t = time.time() - t
+print("        {:7.3f} ms".format(t / 1000. * 1000.))
 
 # time single coordinate access
 print("access array of coordinates (after initial read)")
 for n in [1, 10, 100]:
     ra, dec = np.zeros(n), np.zeros(n)
     t = time.time()
-    m.ebv(ra, dec, interpolate=interpolate)
+    for _ in range(1000):
+        m.ebv(ra, dec, interpolate=interpolate)
     t = time.time() - t
-    print("{:5d} : {:7.2f} ms".format(n, t*1000.))
+    print("n={:3d} : {:7.3f} ms".format(n, t / 1000. * 1000.))
