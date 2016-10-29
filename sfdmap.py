@@ -4,28 +4,146 @@
 import os
 
 import numpy as np
-from scipy.ndimage import map_coordinates
-from astropy.coordinates import SkyCoord
-import astropy.units as u
-from astropy.io import fits
-from astropy.utils import isiterable
+
+# require a FITS reader of some sort.
+try:
+    import fitsio
+    getdata = fitsio.read
+except ImportError:
+    try:
+        from astropy.io.fits import getdata
+    except ImportError:
+        raise ImportError("could not import fitsio or astropy.io.fits")
 
 __all__ = ['SFDMap', 'ebv']
 
+    
+def _isiterable(obj):
+    """Returns `True` if the given object is iterable."""
+
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
+
+# -----------------------------------------------------------------------------
+# Coordinate conversion
+#
+# astropy's coordinate conversions have a gigantic overhead of 30-40ms. This
+# kills performance in situations where you need to get a single position
+# at a time. We can do better by including the core code for the most
+# common coordinate conversions (IRCS/FK5J2000) from astropy here.
+
+# Create rotation matrix about a given axis (x, y, z)
+def zrotmat(angle):
+    s = np.sin(angle)
+    c = np.cos(angle)
+    return np.array(((c, s, 0),
+                     (-s, c, 0),
+                     (0, 0, 1)))
+
+def yrotmat(angle):
+    s = np.sin(angle)
+    c = np.cos(angle)
+    return np.array(((c, 0, -s),
+                     (0, 1, 0),
+                     (s, 0, c)))
+
+def xrotmat(angle):
+    s = np.sin(angle)
+    c = np.cos(angle)
+    return np.array(((1, 0, 0),
+                     (0, c, s),
+                     (0, -s, c)))
+
+# constant ICRS --> FK5J2000 (See USNO Circular 179, section 3.5)
+eta0 = np.deg2rad(-19.9 / 3600000.)
+xi0 = np.deg2rad(9.1 / 3600000.)
+da0 = np.deg2rad(-22.9 / 3600000.)
+ICRS_TO_FK5J2000 = np.dot(np.dot(xrotmat(-eta0), yrotmat(xi0)), zrotmat(da0))
+
+# FK5J2000 --> Gal
+# Note that galactic pole and zeropoint of l are somewhat arbitrary
+# and not officially defined (as far as I know). The values below are
+# from astropy.coordinates, which includes the following comment:
+# | "This gives better consistency with other codes than using the values
+# |  from Reid & Brunthaler 2004 and the best self-consistency between FK5
+# |  -> Galactic and FK5 -> FK4 -> Galactic. The lon0 angle was found by
+# |  optimizing the self-consistency."
+ngp_fk5j2000_ra = np.deg2rad(192.8594812065348)
+ngp_fk5j2000_dec = np.deg2rad(27.12825118085622)
+lon0_fk5j2000 = np.deg2rad(122.9319185680026)
+FK5J2000_TO_GAL = np.dot(np.dot(zrotmat(np.pi - lon0_fk5j2000),
+                                yrotmat(np.pi/2. - ngp_fk5j2000_dec)),
+                         zrotmat(ngp_fk5j2000_ra))
+
+# ICRS --> Gal: simply chain through FK5J2000 
+ICRS_TO_GAL = np.dot(FK5J2000_TO_GAL, ICRS_TO_FK5J2000)
+
+
+# (lon, lat) -> [x, y, z] unit vector
+def coords2cart(lon, lat):
+    coslat = np.cos(lat)
+    return np.array((coslat * np.cos(lon), coslat * np.sin(lon), np.sin(lat)))
+
+
+# [x, y, z] unit vector -> (lon, lat)
+def cart2coords(xyz):
+    x, y, z = xyz
+    return np.arctan2(y, x), np.arctan2(z, np.sqrt(x*x + y*y))
+
+
+def _icrs_to_gal(lon, lat):
+    return cart2coords(np.dot(ICRS_TO_GAL, coords2cart(lon, lat)))
+
+
+def _fk5j2000_to_gal(lon, lat):
+    return cart2coords(np.dot(FK5J2000_TO_GAL, coords2cart(lon, lat)))
+
+
+# -----------------------------------------------------------------------------
+# bilinear interpolation (because scipy.ndimage.map_coordinates is really slow
+# for this)
+
+def _bilinear_interpolate(data, y, x):
+    yfloor = np.floor(y)
+    xfloor = np.floor(x)
+    yw = y - yfloor
+    xw = x - xfloor
+
+    # pixel locations
+    y0 = yfloor.astype(np.int)
+    y1 = y0 + 1
+    x0 = xfloor.astype(np.int)
+    x1 = x0 + 1
+
+    # clip locations out of range
+    ny, nx = data.shape
+    y0 = np.maximum(y0, 0)
+    y1 = np.minimum(y1, ny-1)
+    x0 = np.maximum(x0, 0)
+    x1 = np.minimum(x1, nx-1)
+
+    return ((1.0-xw) * (1.0-yw) * data[y0, x0] +
+            xw       * (1.0-yw) * data[y0, x1] + 
+            (1.0-xw) * yw       * data[y1, x0] +
+            xw       * yw       * data[y1, x1])   
+
+
+# -----------------------------------------------------------------------------
 
 class _Hemisphere(object):
+    """Represents one of the hemispheres (in a single fle)"""
+
     def __init__(self, fname):
-        hdulist = fits.open(fname)
-        header = hdulist[0].header
+        self.data, header = getdata(fname, header=True)
         self.crpix1 = header['CRPIX1']
         self.crpix2 = header['CRPIX2']
         self.lam_scal = header['LAM_SCAL']
         self.sign = header['LAM_NSGP']  # north = 1, south = -1
-        self.data = hdulist[0].data
-        hdulist.close()
 
     def ebv(self, l, b, interpolate):
-
         # Project from galactic longitude/latitude to lambert pixels.
         # (See SFD98 or SFD data FITS header).
         x = (self.crpix1 - 1.0 +
@@ -37,7 +155,7 @@ class _Hemisphere(object):
             
         # Get map values at these pixel coordinates.
         if interpolate:
-            return map_coordinates(self.data, [y, x], order=1)
+            return _bilinear_interpolate(self.data, y, x)
         else:
             x = np.round(x).astype(np.int)
             y = np.round(y).astype(np.int)
@@ -100,7 +218,7 @@ class SFDMap(object):
         self.hemispheres = {'north': None, 'south': None}
 
         
-    def ebv(self, *args, frame='ircs', interpolate=True):
+    def ebv(self, *args, frame='icrs', unit='degree', interpolate=True):
         """Get E(B-V) value(s) at given coordinate(s).
 
         Parameters
@@ -109,18 +227,27 @@ class SFDMap(object):
 
             If one argument is passed, assumed to be a
             `astropy.coordinates.SkyCoords` instance.  If two
-            arguments, treated as ``RA, Dec`` in degrees in the ICRS
-            (e.g., "J2000") system. RA and Dec can each be float or
-            list or numpy array.
+            arguments, treated as ``RA, Dec`` (can be scalars or
+            arrays).  In the two argument case, the frame and unit is
+            take from the keywords.
+
+        frame : {'icrs', 'fk5j2000', 'galactic'}
+            Coordinate frame, if two arguments are passed.
+
+        unit : {'degree', 'radian'}
+
+            Unit of coordinates, if two arguments are passed. Default is ``'degree'``.
 
         interpolate : bool, optional
 
-            Interpolate between the map values using
-            `scipy.ndimage.map_coordinates`. Default is ``True``.
+            Interpolate between the map values using bilinear interpolation.
+            Default is True.
 
         Returns
         -------
+
         float or `~numpy.ndarray`
+
             Specific extinction E(B-V) at the given locations.
 
         """
@@ -132,19 +259,29 @@ class SFDMap(object):
                 l = coordinates.l.radian
                 b = coordinates.b.radian
             except AttributeError:
-                raise ValueError("single argument must be SkyCoord")
+                raise ValueError("single argument must be astropy.coordinates.SkyCoord")
 
         elif len(args) == 2:
             lat, lon = args
-            lat = np.deg2rad(lat)
-            lon = np.deg2rad(lon)
-            if frame == 'galactic':
-                l, b = lat, lon
+
+            # convert to radians
+            if unit in ('deg', 'degree'):
+                lat = np.deg2rad(lat)
+                lon = np.deg2rad(lon)
+            elif unit in ('rad', 'radian'):
+                pass
             else:
-                c = SkyCoord(ra=lat, dec=lon, frame='icrs',
-                             unit=u.rad).galactic
-                l = c.l.radian
-                b = c.b.radian
+                raise ValueError("unit not understood")
+
+            # convert to galactic
+            if frame == 'icrs':
+                l, b = _icrs_to_gal(lat, lon)
+            elif frame == 'galactic':
+                l, b = lat, lon
+            elif frame in ('fk5j2000', 'j2000'):
+                l, b = _fk5j2000_to_gal(lat, lon)
+            else:
+                raise ValueError("frame not understood")
 
         else:
             raise ValueError("too many arguments")
@@ -152,7 +289,7 @@ class SFDMap(object):
 
         # Check if l, b are scalar. If so, convert to 1-d arrays.
         return_scalar = False
-        if not isiterable(l):
+        if not _isiterable(l):
             return_scalar = True
             l, b = np.array([l]), np.array([b])
 
@@ -177,51 +314,6 @@ class SFDMap(object):
             return values
 
 
-def ebv(*args, mapdir=None, interpolate=True):
-    """Get E(B-V) value(s) from Schlegel, Finkbeiner, and Davis (1998)
-    extinction maps.
-
-    Parameters
-    ----------
-
-    coordinates : astropy Coordinates object or tuple
-
-        If tuple, treated as (RA, Dec) in degrees in the ICRS (e.g.,
-        "J2000") system. RA and Dec can each be float or list or numpy
-        array.
-
-    mapdir : str, optional
-
-        Directory in which to find dust map FITS images, which must be
-        named ``SFD_dust_4096_[ngp,sgp].fits``. If `None` (default),
-        the value of the ``sfd98_dir`` configuration item is used. By
-        default, this is ``'.'``.  The value of ``sfd98_dir`` can be set
-        in the configuration file, typically located in
-        ``$HOME/.astropy/config/sncosmo.cfg``.
-
-    interpolate : bool
-        Interpolate between the map values using
-        `scipy.ndimage.map_coordinates`. Default is ``True``.
-    order : int
-        Interpolation order used for interpolate=True. Default is 1.
-
-    Returns
-    -------
-    ebv : float or `~numpy.ndarray`
-        Specific extinction E(B-V) at the given locations.
-
-    Examples
-    --------
-
-    Get E(B-V) value at RA, Dec = (0., 0.):
-
-    >>> get_ebv_from_map((0., 0.), mapdir='/path/to/dir')
-    0.031814847141504288
-
-    Get E(B-V) at RA, Dec = (0., 0.) and (1., 0.):
-
-    >>> get_ebv_from_map(([0., 1.], [0., 0.]), mapdir='/path/to/dir')
-    array([ 0.03181485,  0.03275469])
-    """
-
-    return SFDMap(mapdir=mapdir).ebv(*args, interpolate=interpolate)
+def ebv(*args, mapdir=None, frame='icrs', unit='degree', interpolate=True):
+    return SFDMap(mapdir=mapdir).ebv(*args, frame=frame, unit=unit,
+                                     interpolate=interpolate)
