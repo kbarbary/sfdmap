@@ -3,12 +3,11 @@ import re
 from setuptools import setup
 
 # Synchronize version from code.
-version = re.findall(r"__version__ = \"(.*?)\"", open(fname).read())[0]
+version = re.findall(r"__version__ = \"(.*?)\"", open("sfdmap.py").read())[0]
 
 setup(name="sfdmap",
             version=version,
-            description=("Nested sampling algorithms for evaluating "
-                                            "Bayesian evidence"),
+            description="Get E(B-V) values from Schlegel et al (1998) dust maps",
             long_description="",
             classifiers = ["Development Status :: 4 - Beta",
                            "Programming Language :: Python :: 2",

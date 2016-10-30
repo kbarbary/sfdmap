@@ -162,3 +162,9 @@ def test_boundaries():
     for interp in (False, True):
         for l in (0., np.pi/2, np.pi, 3. * np.pi / 2.):
             m.ebv(l, 0., frame='galactic', unit='radian', interpolate=interp)
+
+
+def test_repr():
+    """Just check that repr works"""
+    repr(sfdmap.SFDMap())
+

@@ -16,8 +16,9 @@ except ImportError:
         raise ImportError("could not import fitsio or astropy.io.fits")
 
 __all__ = ['SFDMap', 'ebv']
+__version__ = "0.1.0"
 
-    
+
 def _isiterable(obj):
     """Returns `True` if the given object is iterable."""
 
@@ -30,10 +31,11 @@ def _isiterable(obj):
 # -----------------------------------------------------------------------------
 # Coordinate conversion
 #
-# astropy's coordinate conversions have a gigantic overhead of 30-40ms. This
-# kills performance in situations where you need to get a single position
-# at a time. We can do better by including the core code for the most
-# common coordinate conversions (IRCS, FK5J2000) from astropy here.
+# astropy's coordinate conversions have a gigantic overhead of about
+# 20ms.  This kills performance in situations where you need to get a
+# single position at a time. We can do better (well under 0.1ms!) for
+# common static systems (IRCS, FK5J2000) by including a bit of code
+# from astropy.coordinates here.
 
 # Create rotation matrix about a given axis (x, y, z)
 def zrotmat(angle):
@@ -170,15 +172,14 @@ class _Hemisphere(object):
 class SFDMap(object):
     """Map of E(B-V) from Schlegel, Finkbeiner and Davis (1998).
 
-    This class is useful for repeated retrieval of E(B-V) values when
+    Use this class for repeated retrieval of E(B-V) values when
     there is no way to retrieve all the values at the same time: It keeps
     a reference to the FITS data from the maps so that each FITS image
-    is read only once.  Note that there is still a large overhead due to
-    coordinate conversion: When possible, pass arrays of coordinates to
-    `SFD98Map.get_ebv` or `get_ebv_from_map`.
+    is read only once.
 
     Parameters
     ----------
+
     mapdir : str, optional
 
         Directory in which to find dust map FITS images, named
@@ -187,38 +188,28 @@ class SFDMap(object):
         environment variable is used, otherwise an empty string is
         used.
 
-    Examples
-    --------
+    north, south : str, optional
 
-    Initialize map:
+        Names of north and south galactic pole FITS files. Defaults are
+        ``SFD_dust_4096_ngp.fits`` and ``SFD_dust_4096_sgp.fits``
+        respectively.
 
-    >>> m = SFDMap('/path/to/dustmap/files')
-
-    Get E(B-V) value at RA, Dec = 0., 0. (ICRS frame)
-
-    >>> m.ebv(0., 0.)
-    0.031814847141504288
-
-    Get E(B-V) at RA, Dec = (0., 0.) and (1., 0.):
-
-    >>> m.ebv([0., 1.], [0., 0.])
-    array([ 0.03181485,  0.03275469])
-
+    scaling : float, optional
+        Scale all E(B-V) map values by this factor. Default is 0.86,
+        corresponding to recalibration from Schlafly & Finkbeiner (2011).
     """
 
     def __init__(self, mapdir=None, north="SFD_dust_4096_ngp.fits",
                  south="SFD_dust_4096_sgp.fits", scaling=0.86):
 
-        # Get mapdir
         if mapdir is None:
             mapdir = os.environ.get('SFD_DIR', '')
         mapdir = os.path.expanduser(mapdir)
         mapdir = os.path.expandvars(mapdir)
-
-        self.fnames = {'north': os.path.join(mapdir, north),
-                       'south': os.path.join(mapdir, south)}
+        self.mapdir = mapdir
 
         # don't load maps initially
+        self.fnames = {'north': north, 'south': south}
         self.hemispheres = {'north': None, 'south': None}
 
         self.scaling = scaling
@@ -229,19 +220,21 @@ class SFDMap(object):
         Parameters
         ----------
 
-        coordinates or ra, dec:
+        coordinates or ra, dec: SkyCoord or numpy.ndarray
 
             If one argument is passed, assumed to be a
-            `astropy.coordinates.SkyCoords` instance.  If two
-            arguments, treated as ``latitute, longitude`` (can be scalars or
-            arrays).  In the two argument case, the frame and unit is
-            taken from the keywords.
+            `astropy.coordinates.SkyCoords` instance. In this case,
+            the ``frame`` and ``unit`` keyword arguments are
+            ignored. If two arguments are passed, they are treated as
+            ``latitute, longitude`` (can be scalars or arrays).  In
+            the two argument case, the frame and unit is taken from
+            the keywords.
 
-        frame : {'icrs', 'fk5j2000', 'galactic'}
+        frame : {'icrs', 'fk5j2000', 'galactic'}, optional
             Coordinate frame, if two arguments are passed. Default is
             ``'icrs'``.
 
-        unit : {'degree', 'radian'}
+        unit : {'degree', 'radian'}, optional
 
             Unit of coordinates, if two arguments are passed. Default
             is ``'degree'``.
@@ -254,15 +247,15 @@ class SFDMap(object):
         Returns
         -------
 
-        float or `~numpy.ndarray`
+        `~numpy.ndarray`
 
             Specific extinction E(B-V) at the given locations.
 
         """
 
-        # compatibility with sncosmo behavior: single argument 2-tuple
-        # is treated as (RA, Dec)
-        if (len(args) == 1) and (type(args[0]) is tuple):
+        # compatibility: treat single argument 2-tuple as (RA, Dec)
+        if ((len(args) == 1) and (type(args[0]) is tuple) and
+            (len(args[0]) == 2)):
             args = args[0]
 
         if len(args) == 1:
@@ -272,7 +265,8 @@ class SFDMap(object):
                 l = coordinates.l.radian
                 b = coordinates.b.radian
             except AttributeError:
-                raise ValueError("single argument must be astropy.coordinates.SkyCoord")
+                raise ValueError("single argument must be "
+                                 "astropy.coordinates.SkyCoord")
 
         elif len(args) == 2:
             lat, lon = args
@@ -310,26 +304,33 @@ class SFDMap(object):
         values = np.empty_like(l)
 
         # Treat north (b>0) separately from south (b<0).
-        for label, mask in (('north', b >= 0), ('south', b < 0)):
+        for pole, mask in (('north', b >= 0), ('south', b < 0)):
             if not np.any(mask):
                 continue
 
             # Initialize hemisphere if it hasn't already been done.
-            if self.hemispheres[label] is None:
-                self.hemispheres[label] = _Hemisphere(self.fnames[label],
-                                                      self.scaling)
-                       
-            values[mask] = self.hemispheres[label].ebv(l[mask], b[mask],
-                                                       interpolate)
+            if self.hemispheres[pole] is None:
+                fname = os.path.join(self.mapdir, self.fnames[pole])
+                self.hemispheres[pole] = _Hemisphere(fname, self.scaling)
+
+            values[mask] = self.hemispheres[pole].ebv(l[mask], b[mask],
+                                                      interpolate)
 
         if return_scalar:
             return values[0]
         else:
             return values
 
+    def __repr__(self):
+        return ("SFDMap(mapdir={!r}, north={!r}, south={!r}, scaling={!r})"
+                .format(self.mapdir, self.fnames['north'],
+                        self.fnames['south'], self.scaling))
 
-def ebv(*args, mapdir=None, scaling=0.86, frame='icrs', unit='degree',
-        interpolate=True):
-    m = SFDMap(mapdir=mapdir, scaling=scaling)
-    return m.ebv(*args, frame=frame, unit=unit,
-                 interpolate=interpolate)
+
+def ebv(*args, mapdir=None, north="SFD_dust_4096_ngp.fits",
+        south="SFD_dust_4096_sgp.fits", scaling=0.86, frame='icrs',
+        unit='degree', interpolate=True):
+    """Convenience function, equivalent to SFDMap().ebv(*args)"""
+
+    m = SFDMap(mapdir=mapdir, north=north, south=south, scaling=scaling)
+    return m.ebv(*args, frame=frame, unit=unit, interpolate=interpolate)
