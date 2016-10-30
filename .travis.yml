@@ -33,7 +33,7 @@ before_install:
 # Note: leave numpy in all `conda install` commands to prevent conda from
 # upgrading it automatically.
 install:
-    - conda create --yes -n test python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION astropy pytest
+    - conda create -c openastronomy --yes -n test python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION astropy fitsio pytest
     - source activate test
     - if [[ $COVERAGE ]]; then pip install pytest-cov coveralls; fi
     - source activate test

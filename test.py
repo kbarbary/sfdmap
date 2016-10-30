@@ -139,14 +139,13 @@ def test_skycoord():
 
 
 def test_fits_readers():
-    """Test that skycoord gives same results"""
     import fitsio
-    from astropy.io.fits import getdata
+    import astropy.io.fits
 
     # test with different fits readers
     sfdmap.getdata = fitsio.read
     ebv1 = minimap().ebv(204.0, -30.0)
-    sfdmap.getdata = getdata
+    sfdmap.getdata = astropy.io.fits.getdata
     ebv2 = minimap().ebv(204.0, -30.0)
 
     assert ebv1 == ebv2
