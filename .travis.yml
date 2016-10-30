@@ -1,0 +1,44 @@
+language: python
+
+# Setting sudo to false opts in to Travis-CI container-based builds.
+sudo: false
+
+python:
+    - 3.5
+
+env:
+    global:
+        - NUMPY_VERSION=1.11
+
+        - CMD='./test.py'
+        - COVERAGE=0
+
+matrix:
+    include:
+        - python: 3.5
+          env: CMD='./test.py --cov-report= --cov=sfdmap.py' NUMPY_VERSION=1.11 COVERAGE=1
+        - python: 2.7
+          env: NUMPY_VERSION=1.6  # py2.7, oldest deps
+        - python: 3.4
+          env: NUMPY_VERSION=1.7  # py3.4, oldest deps
+
+
+before_install:
+    - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+    - chmod +x miniconda.sh
+    - ./miniconda.sh -b -p $HOME/miniconda
+    - export PATH=/home/travis/miniconda/bin:$PATH
+    - conda update --yes conda
+
+# Note: leave numpy in all `conda install` commands to prevent conda from
+# upgrading it automatically.
+install:
+    - conda create --yes -n test python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION astropy pytest
+    - source activate test
+    - if [[ $COVERAGE ]]; then pip install pytest-cov coveralls; fi
+    - source activate test
+    - python setup.py install
+
+script: $CMD
+
+after_success: if [[ $COVERAGE ]]; then coveralls; fi

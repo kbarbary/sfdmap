@@ -1,5 +1,10 @@
 # sfdmap
 
+[![Build Status](https://img.shields.io/travis/kbarbary/sfdmap.svg?style=flat-sq
+uare)](https://travis-ci.org/kbarbary/sfdmap)
+[![Coverage Status](http://img.shields.io/coveralls/kbarbary/sfdmap.svg?style=fl
+at-square)](https://coveralls.io/r/kbarbary/sfdmap?branch=master)
+
 A minimal, fast, MIT-licensed Python module for getting E(B-V) values from
 [Schlegel, Finkbeiner & Davis (1998)](http://adsabs.harvard.edu/abs/1998ApJ...500..525S) dust map FITS files.
 
