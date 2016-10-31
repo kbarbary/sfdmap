@@ -213,3 +213,12 @@ def test_input_options():
     for lat, lon, unit, frame in args:
         ebv = MINIMAP.ebv(lat, lon, unit=unit, frame=frame)
         assert_allclose(ebv, refebv, atol=0.0, rtol=1e-8)
+
+    # unknown frame or unit raises an error
+    with pytest.raises(ValueError) as excinfo:
+        MINIMAP.ebv(204.0, -30.0, unit='foo')
+    assert "not understood" in excinfo.value.args[0]
+
+    with pytest.raises(ValueError) as excinfo:
+        MINIMAP.ebv(204.0, -30.0, frame='foo')
+    assert "not understood" in excinfo.value.args[0]
