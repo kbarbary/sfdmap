@@ -167,3 +167,12 @@ def test_repr():
     """Just check that repr works"""
     repr(sfdmap.SFDMap())
 
+
+def test_convenience_func():
+    m = sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits')
+    ebv1 = m.ebv(204.0, -30.0)
+
+    ebv2 = sfdmap.ebv(204.0, -30.0, mapdir='testdata',
+                      north='SFD_dust_4096_ngp_cutout.fits')
+
+    assert ebv1 == ebv2

@@ -214,7 +214,7 @@ class SFDMap(object):
 
         self.scaling = scaling
 
-    def ebv(self, *args, frame='icrs', unit='degree', interpolate=True):
+    def ebv(self, *args, **kwargs):
         """Get E(B-V) value(s) at given coordinate(s).
 
         Parameters
@@ -252,6 +252,11 @@ class SFDMap(object):
             Specific extinction E(B-V) at the given locations.
 
         """
+
+        # collect kwargs
+        frame = kwargs.get('frame', 'icrs')
+        unit = kwargs.get('unit', 'degree')
+        interpolate = kwargs.get('interpolate', True)
 
         # compatibility: treat single argument 2-tuple as (RA, Dec)
         if ((len(args) == 1) and (type(args[0]) is tuple) and
@@ -327,10 +332,11 @@ class SFDMap(object):
                         self.fnames['south'], self.scaling))
 
 
-def ebv(*args, mapdir=None, north="SFD_dust_4096_ngp.fits",
-        south="SFD_dust_4096_sgp.fits", scaling=0.86, frame='icrs',
-        unit='degree', interpolate=True):
+def ebv(*args, **kwargs):
     """Convenience function, equivalent to SFDMap().ebv(*args)"""
-
-    m = SFDMap(mapdir=mapdir, north=north, south=south, scaling=scaling)
-    return m.ebv(*args, frame=frame, unit=unit, interpolate=interpolate)
+    
+    m = SFDMap(mapdir=kwargs.get('mapdir', None),
+               north=kwargs.get('north', "SFD_dust_4096_ngp.fits"),
+               south=kwargs.get('south', "SFD_dust_4096_sgp.fits"),
+               scaling=kwargs.get('scaling', 0.86))
+    return m.ebv(*args, **kwargs)
