@@ -17,6 +17,7 @@ setup(name="sfdmap",
                            "Topic :: Scientific/Engineering :: Astronomy",
                            "Intended Audience :: Science/Research"],
             py_modules=["sfdmap"],
+            install_requires=["numpy"],
             url="http://github.com/kbarbary/sfdmap",
             author="Kyle Barbary",
             author_email="kylebarbary@gmail.com")

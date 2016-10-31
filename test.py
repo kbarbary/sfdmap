@@ -107,10 +107,9 @@ def test_bilinear_interpolate():
     assert_allclose(f(data, 0.5, 0.5), 3.0)
 
 
-def minimap():
-    return sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits',
-                         scaling=1.0)
-
+MINIMAP = sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits')
+MINIMAP_SFD = sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits',
+                            scaling=1.0)
 
 def test_versus_ned():
     """Test versus NED results"""
@@ -122,35 +121,29 @@ def test_versus_ned():
     for d in NED_RESULTS:
         d['ebv'] = d['landoltv'] / 2.742  # original SFD E(B-V)
 
-    m = minimap()
     for d in NED_RESULTS:
-        ebv = m.ebv(d['ra'], d['dec'])
+        ebv = MINIMAP_SFD.ebv(d['ra'], d['dec'])
         assert_allclose(ebv, d['ebv'], rtol=0.0, atol=0.001)
+
+    
+def test_array_inputs():
+    """Test array inputs (values from NED test above)."""
+    ra = np.array([204.17470, 205.40142])
+    dec = np.array([-29.960283, -33.098216])
+    ebv = MINIMAP_SFD.ebv(ra, dec)
+    assert_allclose(ebv, [0.077315, 0.0539752], rtol=0.0, atol=0.001)
 
 
 def test_skycoord():
     """Test that skycoord gives same results"""
 
-    m = minimap()
     coords = SkyCoord(204.0, -30.0, frame='icrs', unit='degree')
-    ebv1 = m.ebv(coords)
-    ebv2 = m.ebv(204.0, -30.0)
+    ebv1 = MINIMAP.ebv(coords)
+    ebv2 = MINIMAP.ebv(204.0, -30.0)
     assert_allclose(ebv1, ebv2)
 
 
-def test_fits_readers():
-    import fitsio
-    import astropy.io.fits
-
-    # test with different fits readers
-    sfdmap.getdata = fitsio.read
-    ebv1 = minimap().ebv(204.0, -30.0)
-    sfdmap.getdata = astropy.io.fits.getdata
-    ebv2 = minimap().ebv(204.0, -30.0)
-
-    assert ebv1 == ebv2
-
-
+# only test locally when we have the full images.
 @pytest.mark.skipif("SFD_DIR" not in os.environ,
                     reason="SFD_DIR environment variable not set")
 def test_boundaries():
@@ -165,14 +158,58 @@ def test_boundaries():
 
 def test_repr():
     """Just check that repr works"""
-    repr(sfdmap.SFDMap())
+    s = repr(sfdmap.SFDMap())
+    assert "SFDMap(" in s
 
 
 def test_convenience_func():
-    m = sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits')
-    ebv1 = m.ebv(204.0, -30.0)
-
+    ebv1 = MINIMAP.ebv(204.0, -30.0)
     ebv2 = sfdmap.ebv(204.0, -30.0, mapdir='testdata',
                       north='SFD_dust_4096_ngp_cutout.fits')
 
     assert ebv1 == ebv2
+
+
+def test_interpolate_false():
+    """Test no interpolation (also tests fk5j2000)."""
+    # position off-center of a pixel, but reference value is pixel value.
+    ebv = MINIMAP_SFD.ebv(206.61462, -30.441592, frame='fk5j2000',
+                          interpolate=False)
+    assert_allclose(ebv, 0.0552888, atol=0.0000001, rtol=0.0)
+
+
+def test_tuple_arg():
+    """Test that passing (ra, dec) as a tuple works."""
+
+    assert MINIMAP.ebv(204.0, -30.0) == MINIMAP.ebv((204.0, -30.0))
+
+
+def test_argument_exceptions():
+    """Test wrong numbers or types of arguments"""
+
+    # Single argument that isn't a tuple or SkyCoord should raise error
+    with pytest.raises(ValueError) as excinfo:
+        MINIMAP.ebv(204.)
+    assert "SkyCoord" in excinfo.value.args[0]
+
+    # Three arguments is too many
+    with pytest.raises(ValueError) as excinfo:
+        MINIMAP.ebv(0., 0., 0.)
+
+
+def test_input_options():
+    """Test unit and frame options."""
+
+    refebv = MINIMAP.ebv(204.0, -30.0)
+
+    args = [
+        (3.5604716740684323, -0.52359877559829882, 'rad', 'icrs'),
+        (3.5604716740684323, -0.52359877559829882, 'radian', 'icrs'),
+        (-2.7227134608426979, -0.52359877666101706, 'rad', 'fk5j2000'),
+        (-2.7227134608426979, -0.52359877666101706, 'rad', 'j2000'),
+        (-0.79765942859973438, 0.55652232373003641, 'rad', 'galactic'),
+        (-45.702518747581614, 31.886380354544389, 'degree', 'galactic')]
+
+    for lat, lon, unit, frame in args:
+        ebv = MINIMAP.ebv(lat, lon, unit=unit, frame=frame)
+        assert_allclose(ebv, refebv, atol=0.0, rtol=1e-8)

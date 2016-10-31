@@ -12,11 +12,13 @@ env:
         - NUMPY_VERSION=1.11
         - CMD='./test.py'
         - COVERAGE=0
+        - EXTRAS='fitsio'
 
 matrix:
     include:
+        # test without fitsio installed.
         - python: 3.5
-          env: CMD='./test.py --cov-report= --cov=sfdmap.py' COVERAGE=1
+          env: CMD='./test.py --cov-report= --cov=sfdmap.py' COVERAGE=1 EXTRAS=''
 
 before_install:
     - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
@@ -28,7 +30,7 @@ before_install:
 # Note: leave numpy in all `conda install` commands to prevent conda from
 # upgrading it automatically.
 install:
-    - conda create -c openastronomy --yes -n test python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION astropy fitsio pytest
+    - conda create -c openastronomy --yes -n test python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION astropy pytest $EXTRAS
     - source activate test
     - if [[ $COVERAGE ]]; then pip install pytest-cov coveralls; fi
     - source activate test
