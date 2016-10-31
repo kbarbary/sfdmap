@@ -4,6 +4,7 @@
 uare)](https://travis-ci.org/kbarbary/sfdmap)
 [![Coverage Status](http://img.shields.io/coveralls/kbarbary/sfdmap.svg?style=fl
 at-square)](https://coveralls.io/r/kbarbary/sfdmap?branch=master)
+[![PyPI](https://img.shields.io/pypi/v/sfdmap.svg?style=flat-square)](https://pypi.python.org/pypi/sfdmap)
 
 A minimal, fast, MIT-licensed Python module for getting E(B-V) values from
 [Schlegel, Finkbeiner & Davis (1998)](http://adsabs.harvard.edu/abs/1998ApJ...500..525S) dust map FITS files.
@@ -23,7 +24,7 @@ A minimal, fast, MIT-licensed Python module for getting E(B-V) values from
 Requirements: numpy and a FITS reader (either fitsio or astropy).
 
 ```
-pip install sfdmap  # doesn't yet work!
+pip install sfdmap
 ```
 
 The FITS files comprising the map must be downloaded separately. Among other
@@ -112,7 +113,7 @@ the map once:
 0.031818788521008
 ```
 
-### How do I get extinction at a specific wavelength or in a specific filter
+### How do I get extinction at a specific wavelength or in a specific filter?
 
 The E(B-V) values from the map give information about the *amplitude*
 of dust extinction in a given direction. To get the extinction at a
