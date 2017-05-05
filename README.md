@@ -1,9 +1,7 @@
 # sfdmap
 
-[![Build Status](https://img.shields.io/travis/kbarbary/sfdmap.svg?style=flat-sq
-uare)](https://travis-ci.org/kbarbary/sfdmap)
-[![Coverage Status](http://img.shields.io/coveralls/kbarbary/sfdmap.svg?style=fl
-at-square)](https://coveralls.io/r/kbarbary/sfdmap?branch=master)
+[![Build Status](https://img.shields.io/travis/kbarbary/sfdmap.svg?style=flat-square)](https://travis-ci.org/kbarbary/sfdmap)
+[![Coverage Status](http://img.shields.io/coveralls/kbarbary/sfdmap.svg?style=flat-square)](https://coveralls.io/r/kbarbary/sfdmap?branch=master)
 [![PyPI](https://img.shields.io/pypi/v/sfdmap.svg?style=flat-square)](https://pypi.python.org/pypi/sfdmap)
 
 A minimal, fast, MIT-licensed Python module for getting E(B-V) values from
