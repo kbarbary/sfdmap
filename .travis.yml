@@ -18,7 +18,7 @@ matrix:
     include:
         # test without fitsio installed.
         - python: 3.5
-          env: CMD='./test.py --cov-report= --cov=sfdmap.py' COVERAGE=1 EXTRAS=''
+          env: CMD='./test.py --cov-report= --cov=sfdmap' COVERAGE=1 EXTRAS=''
 
 before_install:
     - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
