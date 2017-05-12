@@ -1,5 +1,7 @@
 # Licensed under an MIT "Expat" license - See LICENSE
-"""Get E(B-V) values from the Schlegel, Finkbeiner & Davis (1998) dust map."""
+"""Get E(B-V) values from the Schlegel, Finkbeiner & Davis (1998) dust map.
+
+Dust maps must be downloaded separately."""
 
 import os
 
@@ -13,7 +15,13 @@ except ImportError:
     try:
         from astropy.io.fits import getdata
     except ImportError:
-        raise ImportError("could not import fitsio or astropy.io.fits")
+        # If we don't have either reader, raise an error only when the function
+        # is called. This is so that we can import the module with just numpy
+        # installed (the minimum dependency).
+        def getdata(*args, **kwargs):
+            raise ImportError("Could not import fitsio or astropy.io.fits. "
+                              "Install fitsio or astropy.")
+
 
 __all__ = ['SFDMap', 'ebv']
 __version__ = "0.1.0"
@@ -21,7 +29,6 @@ __version__ = "0.1.0"
 
 def _isiterable(obj):
     """Returns `True` if the given object is iterable."""
-
     try:
         iter(obj)
         return True
