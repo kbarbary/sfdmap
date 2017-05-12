@@ -3,22 +3,25 @@ language: python
 # Setting sudo to false opts in to Travis-CI container-based builds.
 sudo: false
 
-python:
-    - 2.7
-    - 3.5
-
 env:
     global:
-        - NUMPY_VERSION=1.11
+        - PYTHON_VERSION=3.6
+        - NUMPY_VERSION=1.12
         - CMD='./test.py'
         - COVERAGE=0
-        - EXTRAS='fitsio'
+        - EXTRAS='astropy'
 
 matrix:
     include:
-        # test without fitsio installed.
-        - python: 3.5
-          env: CMD='./test.py --cov-report= --cov=sfdmap' COVERAGE=1 EXTRAS=''
+        - env: PYTHON_VERSION=3.4 NUMPY_VERSION=1.11
+        - env: PYTHON_VERSION=2.7
+
+        # test with fitsio instead of fitsio installed.
+        - python: 3.6
+          env: CMD='./test.py --cov-report= --cov=sfdmap' COVERAGE=1 EXTRAS='fitsio'
+        # test that import works with no FITS reader installed.
+        - python: 3.6
+          env: EXTRAS=''
 
 before_install:
     - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
@@ -30,7 +33,7 @@ before_install:
 # Note: leave numpy in all `conda install` commands to prevent conda from
 # upgrading it automatically.
 install:
-    - conda create -c openastronomy --yes -n test python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION astropy pytest $EXTRAS
+    - conda create -c openastronomy --yes -n test python=$PYTHON_VERSION numpy=$NUMPY_VERSION $EXTRAS pytest
     - source activate test
     - if [[ $COVERAGE ]]; then pip install pytest-cov coveralls; fi
     - source activate test

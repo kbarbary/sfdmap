@@ -4,16 +4,28 @@ import os
 
 import numpy as np
 from numpy.testing import assert_allclose
-from astropy.coordinates import SkyCoord
 import pytest
-
+try:
+    from astropy.coordinates import SkyCoord
+    HAVE_ASTROPY = True
+except ImportError:
+    HAVE_ASTROPY = False
+try:
+    import fitsio
+    HAVE_FITSIO = True
+except:
+    HAVE_FITSIO = False
+    
 import sfdmap
+
+
+# We end up skipping most of the tests if we don't have a FITS reader
+# but we want to be able to run them anyway to test that importing works
+# with minimal dependencies (numpy).
+HAVE_FITS_READER = HAVE_FITSIO or HAVE_ASTROPY
 
 # -----------------------------------------------------------------------------
 # Test coordinate conversions
-
-import os
-
 
 datapath = os.path.join(os.path.dirname(__file__), "testdata")
 TOL = 0.0001  # tolerance in arcseconds
@@ -111,6 +123,8 @@ MINIMAP = sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits')
 MINIMAP_SFD = sfdmap.SFDMap('testdata', north='SFD_dust_4096_ngp_cutout.fits',
                             scaling=1.0)
 
+
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")
 def test_versus_ned():
     """Test versus NED results"""
 
@@ -125,7 +139,8 @@ def test_versus_ned():
         ebv = MINIMAP_SFD.ebv(d['ra'], d['dec'])
         assert_allclose(ebv, d['ebv'], rtol=0.0, atol=0.001)
 
-    
+
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")    
 def test_array_inputs():
     """Test array inputs (values from NED test above)."""
     ra = np.array([204.17470, 205.40142])
@@ -134,6 +149,7 @@ def test_array_inputs():
     assert_allclose(ebv, [0.077315, 0.0539752], rtol=0.0, atol=0.001)
 
 
+@pytest.mark.skipif(not HAVE_ASTROPY, reason="no astropy")
 def test_skycoord():
     """Test that skycoord gives same results"""
 
@@ -144,7 +160,7 @@ def test_skycoord():
 
 
 # only test locally when we have the full images.
-@pytest.mark.skipif("SFD_DIR" not in os.environ,
+@pytest.mark.skipif("SFD_DIR" not in os.environ or not HAVE_FITS_READER,
                     reason="SFD_DIR environment variable not set")
 def test_boundaries():
     """Test that interpolation=False works at b=0"""
@@ -162,6 +178,7 @@ def test_repr():
     assert "SFDMap(" in s
 
 
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")
 def test_convenience_func():
     ebv1 = MINIMAP.ebv(204.0, -30.0)
     ebv2 = sfdmap.ebv(204.0, -30.0, mapdir='testdata',
@@ -170,6 +187,7 @@ def test_convenience_func():
     assert ebv1 == ebv2
 
 
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")
 def test_interpolate_false():
     """Test no interpolation (also tests fk5j2000)."""
     # position off-center of a pixel, but reference value is pixel value.
@@ -178,12 +196,14 @@ def test_interpolate_false():
     assert_allclose(ebv, 0.0552888, atol=0.0000001, rtol=0.0)
 
 
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")
 def test_tuple_arg():
     """Test that passing (ra, dec) as a tuple works."""
 
     assert MINIMAP.ebv(204.0, -30.0) == MINIMAP.ebv((204.0, -30.0))
 
 
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")
 def test_argument_exceptions():
     """Test wrong numbers or types of arguments"""
 
@@ -197,6 +217,7 @@ def test_argument_exceptions():
         MINIMAP.ebv(0., 0., 0.)
 
 
+@pytest.mark.skipif(not HAVE_FITS_READER, reason="no FITS reader")
 def test_input_options():
     """Test unit and frame options."""
 
